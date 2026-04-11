@@ -1,0 +1,8 @@
+{
+  "name": "regina-service",
+  "private": true,
+  "dependencies": {
+    "@platformatic/regina": "0.0.1",
+    "@platformatic/regina-agent": "0.0.1"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "module": "packages/regina",
+  "management": true,
+  "entrypoint": "pod1",
+  "services": [
+    {
+      "id": "pod1",
+      "path": "./packages/regina",
+      "management": {
+        "operations": ["addApplications", "removeApplications", "getApplications", "getApplicationDetails", "inject"]
+      }
+    }
+  ]
+}

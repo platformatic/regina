@@ -1,0 +1,51 @@
+{
+  "name": "@platformatic/regina",
+  "version": "0.0.8",
+  "description": "AI Agent Orchestrator for Platformatic Watt",
+  "homepage": "https://github.com/platformatic/regina",
+  "author": "Platformatic Inc. <oss@platformatic.dev> (https://platformatic.dev)",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/platformatic/regina.git",
+    "directory": "packages/regina"
+  },
+  "private": false,
+  "publishConfig": {
+    "access": "restricted"
+  },
+  "publishConfig": {
+    "access": "restricted"
+  },
+  "files": [
+    "dist",
+    "schema.json",
+    "LICENSE",
+    "README.md"
+  ],
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "test": "node --experimental-strip-types --test --test-reporter=cleaner-spec-reporter test/*.test.ts"
+  },
+  "dependencies": {
+    "@platformatic/globals": "^3.49.1",
+    "@platformatic/foundation": "^3.49.1",
+    "@platformatic/regina-storage": "workspace:*",
+    "@platformatic/service": "^3.49.1",
+    "fastify-plugin": "^5.0.1",
+    "iovalkey": "^0.3.3",
+    "nanoid": "^5.1.5",
+    "undici": "^7.23.0",
+    "yaml": "^2.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.2",
+    "fastify": "^5.3.2"
+  },
+  "engines": {
+    "node": ">= 22.18.0"
+  }
+}

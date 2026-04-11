@@ -1,0 +1,119 @@
+import { kMetadata } from '@platformatic/foundation'
+import type { FastifyInstance } from 'fastify'
+import fp from 'fastify-plugin'
+import { resolve } from 'node:path'
+import { discoverAgents } from './agent-discovery.ts'
+import { InstanceManager } from './instance-manager.ts'
+import { MemberRegistry } from './member-registry.ts'
+import { createMetrics } from './metrics.ts'
+import { agentRoutes } from './routes/agents.ts'
+import { chatRoutes } from './routes/chat.ts'
+import { delegateRoutes } from './routes/delegate.ts'
+import { instanceRoutes } from './routes/instances.ts'
+import { StateBackup } from './state-backup.ts'
+
+async function reginaPlugin (app: FastifyInstance, _options: Record<string, unknown>) {
+  const config = (app as any).platformatic.config.regina ?? {}
+  const root = (app as any).platformatic.config[kMetadata].root
+  const agentsDir = resolve(root, config.agentsDir ?? './agents')
+
+  const definitions = await discoverAgents(agentsDir)
+  app.log.info({ count: definitions.size, dir: agentsDir }, 'Discovered agent definitions')
+
+  app.decorate('agentDefinitions', definitions)
+
+  const management = (globalThis as any).platformatic?.management
+  const coordinatorId: string | undefined = (globalThis as any).platformatic?.applicationId
+  const idleTimeout = (config.idleTimeout ?? 300) * 1000
+  const vfsDir = resolve(root, config.vfsDir ?? './vfs')
+
+  // Conditional Redis + MemberRegistry
+  let redis: import('iovalkey').Redis | undefined
+  let memberRegistry: MemberRegistry | undefined
+  let heartbeatInterval: ReturnType<typeof setInterval> | undefined
+
+  if (config.redis) {
+    const { Redis } = await import('iovalkey')
+    redis = new Redis(config.redis)
+    const memberAddress = config.memberAddress ?? ''
+    const memberId = config.memberId ?? coordinatorId ?? ''
+    memberRegistry = new MemberRegistry(redis, memberAddress, memberId)
+    await memberRegistry.register()
+    heartbeatInterval = setInterval(() => {
+      memberRegistry!.heartbeat()
+    }, 10_000)
+    heartbeatInterval.unref()
+    app.log.info({ memberId }, 'Registered in member registry')
+  }
+
+  // Conditional Storage + StateBackup
+  let storageAdapter: import('@platformatic/regina-storage').StorageAdapter | undefined
+  let stateBackup: StateBackup | undefined
+
+  if (config.storage) {
+    const storageConfig = config.storage
+    if (storageConfig.type === 'fs') {
+      const { FsAdapter } = await import('@platformatic/regina-storage')
+      storageAdapter = new FsAdapter({ basePath: storageConfig.basePath ?? resolve(root, './state-backup') })
+    } else if (storageConfig.type === 's3') {
+      const { S3Adapter } = await import('@platformatic/regina-storage')
+      storageAdapter = new S3Adapter({
+        bucket: storageConfig.bucket,
+        prefix: storageConfig.prefix,
+        endpoint: storageConfig.endpoint,
+        region: storageConfig.region
+      })
+    } else if (storageConfig.type === 'redis') {
+      if (!redis) {
+        const { Redis } = await import('iovalkey')
+        redis = new Redis(config.redis)
+      }
+      const { RedisAdapter } = await import('@platformatic/regina-storage')
+      storageAdapter = new RedisAdapter({ client: redis })
+    }
+
+    if (storageAdapter) {
+      stateBackup = new StateBackup(storageAdapter, vfsDir)
+      app.log.info({ type: storageConfig.type }, 'State backup enabled')
+    }
+  }
+
+  const metrics = createMetrics()
+  const instanceManager = new InstanceManager({
+    definitions,
+    management,
+    root,
+    config,
+    idleTimeout,
+    coordinatorId,
+    memberRegistry,
+    stateBackup,
+    metrics,
+    useProcesses: config.useProcesses ?? false
+  })
+  app.decorate('instanceManager', instanceManager)
+
+  app.addHook('onClose', async () => {
+    instanceManager.clearAllTimers()
+    if (heartbeatInterval) {
+      clearInterval(heartbeatInterval)
+    }
+    await instanceManager.backupStartedInstances()
+    if (memberRegistry) {
+      await memberRegistry.deregister()
+    }
+    if (storageAdapter) {
+      await storageAdapter.close()
+    }
+    if (redis) {
+      await redis.quit()
+    }
+  })
+
+  await app.register(agentRoutes)
+  await app.register(instanceRoutes)
+  await app.register(chatRoutes)
+  await app.register(delegateRoutes)
+}
+
+export const plugin = fp(reginaPlugin, { name: 'regina' })

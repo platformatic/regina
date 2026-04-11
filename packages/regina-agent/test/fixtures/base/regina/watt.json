@@ -1,0 +1,6 @@
+{
+  "$schema": "https://schemas.platformatic.dev/@platformatic/regina/0.0.1.json",
+  "regina": {
+    "useProcesses": false
+  }
+}
