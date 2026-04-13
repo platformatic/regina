@@ -62,4 +62,4 @@ export async function create (
   return new ReginaAgentCapability(config[kMetadata].root, config as ReginaAgentConfiguration, context)
 }
 
-export { packageJson, schema, schemaComponents, version } from './schema.ts'
+export * from './schema.ts'
