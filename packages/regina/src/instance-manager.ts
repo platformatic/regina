@@ -90,6 +90,26 @@ export class InstanceManager<Definition extends AgentDefinition = AgentDefinitio
     this.#prepareApplication = (options.prepareApplication ?? this.defaultPrepareApplication).bind(this)
   }
 
+  get root (): string {
+    return this.#root
+  }
+
+  get config (): Record<string, any> {
+    return this.#config
+  }
+
+  get definitions (): Map<string, Definition> {
+    return this.#definitions
+  }
+
+  get coordinatorId (): string | undefined {
+    return this.#coordinatorId
+  }
+
+  get configDir (): string {
+    return this.#configDir
+  }
+
   async spawnInstance (definitionId: string, existingInstanceId?: string): Promise<InstanceInfo> {
     const definition = this.#definitions.get(definitionId)
     if (!definition) {
