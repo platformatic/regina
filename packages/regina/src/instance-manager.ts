@@ -36,7 +36,7 @@ export interface InstanceManagerOptions<Definition extends AgentDefinition = Age
   prepareApplication?: ApplicationPreparer<Definition>
 }
 
-function inferProviderFromModel (model: string): string | undefined {
+export function inferProviderFromModel (model: string): string | undefined {
   if (model.includes('/')) return 'vercel-gateway'
   if (model.startsWith('claude') || model.startsWith('anthropic')) return 'anthropic'
   if (model.startsWith('gpt') || model.startsWith('o1') || model.startsWith('o3') || model.startsWith('o4')) {
@@ -45,7 +45,7 @@ function inferProviderFromModel (model: string): string | undefined {
   return undefined
 }
 
-function resolveProviderEnvKey<Definition extends AgentDefinition> (definition: Definition): string | undefined {
+export function resolveProviderEnvKey<Definition extends AgentDefinition> (definition: Definition): string | undefined {
   const provider = definition.provider ?? inferProviderFromModel(definition.model)
   const keys: Record<string, string> = {
     anthropic: 'ANTHROPIC_API_KEY',
@@ -55,7 +55,7 @@ function resolveProviderEnvKey<Definition extends AgentDefinition> (definition: 
   return provider ? keys[provider] : undefined
 }
 
-function generateId (prefix: string): string {
+export function generateId (prefix: string): string {
   return `${prefix}-${randomBytes(3).toString('hex')}`
 }
 
