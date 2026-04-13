@@ -33,22 +33,27 @@ graph TB
 
 All options go under the `regina` key in `platformatic.json`:
 
-| Option              | Default    | Description                                                                |
-| ------------------- | ---------- | -------------------------------------------------------------------------- |
-| `agentsDir`         | `./agents` | Directory containing agent definition `.md` files                          |
-| `vfsDir`            | `./vfs`    | Directory for per-instance SQLite VFS databases                            |
-| `idleTimeout`       | `300`      | Seconds of inactivity before auto-suspending an instance                   |
-| `useProcesses`      | `false`    | Run each agent instance as a separate Node.js process                      |
-| `factory`           | --         | Path to a module that exports `prepareApplication(instanceId, definition)` |
-| `defaults.provider` | --         | Default AI provider for all agents                                         |
-| `defaults.model`    | --         | Default model for all agents                                               |
-| `defaults.maxSteps` | `10`       | Default max agentic loop steps                                             |
+| Option              | Default    | Description                                                                                 |
+| ------------------- | ---------- | ------------------------------------------------------------------------------------------- |
+| `agentsDir`         | `./agents` | Directory containing agent definition `.md` files                                           |
+| `vfsDir`            | `./vfs`    | Directory for per-instance SQLite VFS databases                                             |
+| `idleTimeout`       | `300`      | Seconds of inactivity before auto-suspending an instance                                    |
+| `useProcesses`      | `false`    | Run each agent instance as a separate Node.js process                                       |
+| `factory`           | --         | Local module path or `npm:<package>` exporting `prepareApplication(instanceId, definition)` |
+| `defaults.provider` | --         | Default AI provider for all agents                                                          |
+| `defaults.model`    | --         | Default model for all agents                                                                |
+| `defaults.maxSteps` | `10`       | Default max agentic loop steps                                                              |
 
 ### Custom Application Factory
 
 Use `regina.factory` to override how instance applications are prepared before spawn.
 
-`factory` must point to a module (relative to the Platformatic root) exporting:
+`factory` can be:
+
+- a local module path (relative to the Platformatic root)
+- an installed package in `npm:<package-name>` form
+
+Both forms must export:
 
 ```js
 export async function prepareApplication (instanceId, definition) {
