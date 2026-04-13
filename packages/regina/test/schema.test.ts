@@ -1,6 +1,6 @@
-import { deepStrictEqual, strictEqual, ok } from 'node:assert'
+import { deepStrictEqual, ok, strictEqual } from 'node:assert'
 import test from 'node:test'
-import { schema, schemaComponents, version, packageJson, regina } from '../src/schema.ts'
+import { packageJson, regina, schema, schemaComponents, version } from '../src/schema.ts'
 
 test('schema - exports version from package.json', () => {
   strictEqual(version, packageJson.version)
@@ -50,6 +50,7 @@ test('schema - regina config shape', () => {
       memberAddress: { type: 'string' },
       memberId: { type: 'string' },
       useProcesses: { type: 'boolean', default: false },
+      factory: { type: 'string' },
       storage: {
         type: 'object',
         properties: {

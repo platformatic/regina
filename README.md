@@ -373,6 +373,8 @@ erDiagram
     "agentsDir": "./agents",
     "vfsDir": "./vfs",
     "idleTimeout": 300,
+    "useProcesses": false,
+    "factory": "./factory.mjs",
     "defaults": {
       "provider": "anthropic",
       "model": "claude-sonnet-4-5",
@@ -400,6 +402,28 @@ erDiagram
   }
 }
 ```
+
+### Custom Factory
+
+You can customize how Regina prepares each spawned application with `regina.factory`.
+The module must export `prepareApplication(instanceId, definition)` and return the application arguments passed to Watt management.
+
+```js
+export async function prepareApplication (instanceId, definition) {
+  return {
+    id: instanceId,
+    path: '/tmp/custom-app',
+    config: `${definition.id}:${instanceId}`,
+    env: { FACTORY: '1' }
+  }
+}
+```
+
+If the export is missing, Regina uses the default internal factory.
+
+### Process Mode
+
+Set `regina.useProcesses` to `true` to run each `@platformatic/regina-agent` instance in a separate Node.js process instead of in-process runtime mode.
 
 ## REST API
 

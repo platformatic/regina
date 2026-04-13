@@ -1,9 +1,10 @@
-import { kMetadata } from '@platformatic/foundation'
+import { ensureLoggableError, kMetadata } from '@platformatic/foundation'
 import type { FastifyInstance } from 'fastify'
 import fp from 'fastify-plugin'
 import { resolve } from 'node:path'
 import { discoverAgents } from './agent-discovery.ts'
 import { InstanceManager } from './instance-manager.ts'
+import type { InstanceManagerOptions } from './instance-manager.ts'
 import { MemberRegistry } from './member-registry.ts'
 import { createMetrics } from './metrics.ts'
 import { agentRoutes } from './routes/agents.ts'
@@ -79,7 +80,7 @@ async function reginaPlugin (app: FastifyInstance, _options: Record<string, unkn
   }
 
   const metrics = createMetrics()
-  const instanceManager = new InstanceManager({
+  const instanceManagerOptions: InstanceManagerOptions = {
     definitions,
     management,
     root,
@@ -90,7 +91,22 @@ async function reginaPlugin (app: FastifyInstance, _options: Record<string, unkn
     stateBackup,
     metrics,
     useProcesses: config.useProcesses ?? false
-  })
+  }
+
+  if (config.factory) {
+    const factoryPath = resolve(root, config.factory)
+    try {
+      const factory = await import(factoryPath)
+
+      if (typeof factory.prepareApplication === 'function') {
+        instanceManagerOptions.prepareApplication = factory.prepareApplication
+      }
+    } catch (err) {
+      app.log.error({ err: ensureLoggableError(err as Error), path: factoryPath }, 'Failed to load factory module.')
+    }
+  }
+
+  const instanceManager = new InstanceManager(instanceManagerOptions)
   app.decorate('instanceManager', instanceManager)
 
   app.addHook('onClose', async () => {

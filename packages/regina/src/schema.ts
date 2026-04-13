@@ -35,7 +35,8 @@ export const regina = {
         region: { type: 'string' }
       },
       additionalProperties: false
-    }
+    },
+    factory: { type: 'string' }
   },
   additionalProperties: false
 } as const
