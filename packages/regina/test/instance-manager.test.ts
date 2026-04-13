@@ -1,12 +1,12 @@
-import { strictEqual, ok } from 'node:assert'
-import { readFile, mkdtemp, rm } from 'node:fs/promises'
+import { ok, strictEqual } from 'node:assert'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { InstanceManager } from '../src/instance-manager.ts'
 import type { AgentDefinition } from '../src/agent-discovery.ts'
-import type { StateBackup } from '../src/state-backup.ts'
+import { InstanceManager } from '../src/instance-manager.ts'
 import type { ReginaMetrics } from '../src/metrics.ts'
+import type { StateBackup } from '../src/state-backup.ts'
 
 async function createTestRoot (t: any): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), 'regina-test-'))

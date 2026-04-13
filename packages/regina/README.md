@@ -33,28 +33,53 @@ graph TB
 
 All options go under the `regina` key in `platformatic.json`:
 
-| Option | Default | Description |
-|---|---|---|
-| `agentsDir` | `./agents` | Directory containing agent definition `.md` files |
-| `vfsDir` | `./vfs` | Directory for per-instance SQLite VFS databases |
-| `idleTimeout` | `300` | Seconds of inactivity before auto-suspending an instance |
-| `defaults.provider` | -- | Default AI provider for all agents |
-| `defaults.model` | -- | Default model for all agents |
-| `defaults.maxSteps` | `10` | Default max agentic loop steps |
+| Option              | Default    | Description                                                                |
+| ------------------- | ---------- | -------------------------------------------------------------------------- |
+| `agentsDir`         | `./agents` | Directory containing agent definition `.md` files                          |
+| `vfsDir`            | `./vfs`    | Directory for per-instance SQLite VFS databases                            |
+| `idleTimeout`       | `300`      | Seconds of inactivity before auto-suspending an instance                   |
+| `useProcesses`      | `false`    | Run each agent instance as a separate Node.js process                      |
+| `factory`           | --         | Path to a module that exports `prepareApplication(instanceId, definition)` |
+| `defaults.provider` | --         | Default AI provider for all agents                                         |
+| `defaults.model`    | --         | Default model for all agents                                               |
+| `defaults.maxSteps` | `10`       | Default max agentic loop steps                                             |
+
+### Custom Application Factory
+
+Use `regina.factory` to override how instance applications are prepared before spawn.
+
+`factory` must point to a module (relative to the Platformatic root) exporting:
+
+```js
+export async function prepareApplication (instanceId, definition) {
+  return {
+    id: instanceId,
+    path: '/absolute/or/runtime/path/to/application',
+    config: '/path/to/config-or-config-object',
+    env: { FACTORY: '1' }
+  }
+}
+```
+
+If `prepareApplication` is missing, Regina falls back to the built-in factory.
+
+### Process Mode
+
+Set `regina.useProcesses` to `true` to run each `@platformatic/regina-agent` instance as a dedicated Node.js process.
 
 ### Multi-Pod Options (all optional)
 
-| Option | Description |
-|---|---|
-| `redis` | Redis/Valkey connection URL. Enables pod self-registration. |
-| `memberAddress` | This pod's routable address (e.g., from `POD_IP` env var) |
-| `memberId` | Unique pod identifier (e.g., hostname) |
-| `storage.type` | Storage adapter: `fs`, `s3`, or `redis` |
-| `storage.basePath` | Filesystem adapter: base directory path |
-| `storage.bucket` | S3 adapter: bucket name |
-| `storage.prefix` | S3 adapter: key prefix |
-| `storage.endpoint` | S3 adapter: endpoint URL |
-| `storage.region` | S3 adapter: AWS region |
+| Option             | Description                                                 |
+| ------------------ | ----------------------------------------------------------- |
+| `redis`            | Redis/Valkey connection URL. Enables pod self-registration. |
+| `memberAddress`    | This pod's routable address (e.g., from `POD_IP` env var)   |
+| `memberId`         | Unique pod identifier (e.g., hostname)                      |
+| `storage.type`     | Storage adapter: `fs`, `s3`, or `redis`                     |
+| `storage.basePath` | Filesystem adapter: base directory path                     |
+| `storage.bucket`   | S3 adapter: bucket name                                     |
+| `storage.prefix`   | S3 adapter: key prefix                                      |
+| `storage.endpoint` | S3 adapter: endpoint URL                                    |
+| `storage.region`   | S3 adapter: AWS region                                      |
 
 ## Instance Lifecycle
 

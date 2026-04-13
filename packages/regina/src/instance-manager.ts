@@ -3,10 +3,38 @@ import { randomBytes } from 'node:crypto'
 import { mkdir, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { AgentDefinition } from './agent-discovery.ts'
 import type { MemberRegistry } from './member-registry.ts'
 import type { ReginaMetrics } from './metrics.ts'
 import type { StateBackup } from './state-backup.ts'
+
+export interface InstanceInfo {
+  instanceId: string
+  definitionId: string
+  status: 'started' | 'stopped' | 'suspended'
+  createdAt: Date
+}
+
+export type ApplicationPreparer<Definition extends AgentDefinition = AgentDefinition> = (
+  this: InstanceManager<Definition>,
+  instanceId: string,
+  definition: Definition
+) => Promise<object>
+
+export interface InstanceManagerOptions<Definition extends AgentDefinition = AgentDefinition> {
+  definitions: Map<string, Definition>
+  management: any
+  root: string
+  config: Record<string, any>
+  idleTimeout?: number
+  coordinatorId?: string
+  memberRegistry?: MemberRegistry
+  stateBackup?: StateBackup
+  metrics?: ReginaMetrics | null
+  useProcesses?: boolean
+  prepareApplication?: ApplicationPreparer<Definition>
+}
 
 function inferProviderFromModel (model: string): string | undefined {
   if (model.includes('/')) return 'vercel-gateway'
@@ -17,7 +45,7 @@ function inferProviderFromModel (model: string): string | undefined {
   return undefined
 }
 
-function resolveProviderEnvKey (definition: AgentDefinition): string | undefined {
+function resolveProviderEnvKey<Definition extends AgentDefinition> (definition: Definition): string | undefined {
   const provider = definition.provider ?? inferProviderFromModel(definition.model)
   const keys: Record<string, string> = {
     anthropic: 'ANTHROPIC_API_KEY',
@@ -27,34 +55,14 @@ function resolveProviderEnvKey (definition: AgentDefinition): string | undefined
   return provider ? keys[provider] : undefined
 }
 
-export interface InstanceInfo {
-  instanceId: string
-  definitionId: string
-  status: 'started' | 'stopped' | 'suspended'
-  createdAt: Date
-}
-
 function generateId (prefix: string): string {
   return `${prefix}-${randomBytes(3).toString('hex')}`
 }
 
-export interface InstanceManagerOptions {
-  definitions: Map<string, AgentDefinition>
-  management: any
-  root: string
-  config: Record<string, any>
-  idleTimeout?: number
-  coordinatorId?: string
-  memberRegistry?: MemberRegistry
-  stateBackup?: StateBackup
-  metrics?: ReginaMetrics | null
-  useProcesses?: boolean
-}
-
-export class InstanceManager {
+export class InstanceManager<Definition extends AgentDefinition = AgentDefinition> {
   #instances = new Map<string, InstanceInfo>()
   #timers = new Map<string, ReturnType<typeof setTimeout>>()
-  #definitions: Map<string, AgentDefinition>
+  #definitions: Map<string, Definition>
   #management: any
   #root: string
   #config: Record<string, any>
@@ -65,8 +73,9 @@ export class InstanceManager {
   #metrics: ReginaMetrics | null
   #configDir: string
   #useProcesses: boolean
+  #prepareApplication: ApplicationPreparer<Definition>
 
-  constructor (options: InstanceManagerOptions) {
+  constructor (options: InstanceManagerOptions<Definition>) {
     this.#definitions = options.definitions
     this.#management = options.management
     this.#root = options.root
@@ -78,6 +87,7 @@ export class InstanceManager {
     this.#metrics = options.metrics ?? null
     this.#configDir = join(tmpdir(), 'regina-instances')
     this.#useProcesses = options.useProcesses ?? false
+    this.#prepareApplication = (options.prepareApplication ?? this.defaultPrepareApplication).bind(this)
   }
 
   async spawnInstance (definitionId: string, existingInstanceId?: string): Promise<InstanceInfo> {
@@ -90,27 +100,9 @@ export class InstanceManager {
     this.#metrics?.instanceSpawnsTotal.inc({ definition_id: definitionId })
     const stopTimer = this.#metrics?.instanceSpawnDuration.startTimer({ definition_id: definitionId })
 
-    const agentPackagePath =
-      getGlobal()?.root ?? resolve(dirname(new URL(import.meta.url).pathname), '../../regina-agent')
-    const vfsDir = resolve(this.#root, this.#config.vfsDir ?? './vfs')
-    await mkdir(vfsDir, { recursive: true })
-    const vfsDbPath = resolve(vfsDir, `${instanceId}.sqlite`)
-    const envKey = resolveProviderEnvKey(definition)
-    const apiKey = envKey ? process.env[envKey] : undefined
+    const applicationArguments = await this.#prepareApplication(instanceId, definition)
 
-    const agentConfig = this.#buildInstanceConfig(definition, vfsDbPath, this.#coordinatorId, instanceId, apiKey)
-    const configPath = await this.#writeInstanceConfig(instanceId, agentConfig)
-
-    await this.#management.addApplications(
-      [
-        {
-          id: instanceId,
-          path: agentPackagePath,
-          config: configPath
-        }
-      ],
-      true
-    )
+    await this.#management.addApplications([applicationArguments], true)
 
     if (this.#memberRegistry) {
       await this.#memberRegistry.registerInstance(instanceId)
@@ -230,7 +222,7 @@ export class InstanceManager {
       await this.#stateBackup.cleanup(instanceId)
     }
 
-    await this.#removeInstanceConfig(instanceId)
+    await this.removeInstanceConfig(instanceId)
   }
 
   listInstances (definitionId?: string): InstanceInfo[] {
@@ -261,6 +253,15 @@ export class InstanceManager {
     }
   }
 
+  getConfigPath (instanceId: string): string {
+    return join(this.#configDir, `${instanceId}.json`)
+  }
+
+  getApplicationPath (): string {
+    const root = getGlobal()?.root
+    return root ? fileURLToPath(root) : resolve(dirname(new URL(import.meta.url).pathname), '../../regina-agent')
+  }
+
   #startTimer (instanceId: string): void {
     if (this.#idleTimeout <= 0) return
     const timer = setTimeout(() => {
@@ -278,13 +279,9 @@ export class InstanceManager {
     }
   }
 
-  #getConfigPath (instanceId: string): string {
-    return join(this.#configDir, `${instanceId}.json`)
-  }
-
-  #buildInstanceConfig (
-    definition: AgentDefinition,
-    vfsDbPath: string,
+  buildInstanceConfig (
+    definition: Definition,
+    vfsDbPath: string | undefined,
     coordinatorId?: string,
     instanceId?: string,
     apiKey?: string
@@ -302,16 +299,35 @@ export class InstanceManager {
     }
   }
 
-  async #writeInstanceConfig (instanceId: string, config: object): Promise<string> {
+  async writeInstanceConfig (instanceId: string, config: object): Promise<string> {
     await mkdir(this.#configDir, { recursive: true })
-    const configPath = this.#getConfigPath(instanceId)
+    const configPath = this.getConfigPath(instanceId)
     await writeFile(configPath, JSON.stringify(config, null, 2))
     return configPath
   }
 
-  async #removeInstanceConfig (instanceId: string): Promise<void> {
+  async removeInstanceConfig (instanceId: string): Promise<void> {
     try {
-      await unlink(this.#getConfigPath(instanceId))
+      await unlink(this.getConfigPath(instanceId))
     } catch {}
+  }
+
+  async defaultPrepareApplication (instanceId: string, definition: Definition): Promise<object> {
+    const vfsDir = resolve(this.#root, this.#config.vfsDir ?? './vfs')
+    await mkdir(vfsDir, { recursive: true })
+    const vfsDbPath = resolve(vfsDir, `${instanceId}.sqlite`)
+
+    const envKey = resolveProviderEnvKey(definition)
+    const apiKey = envKey ? process.env[envKey] : undefined
+
+    return {
+      id: instanceId,
+      path: this.getApplicationPath(),
+      config: await this.writeInstanceConfig(
+        instanceId,
+        this.buildInstanceConfig(definition, vfsDbPath, this.#coordinatorId, instanceId, apiKey)
+      ),
+      env: {} as Record<string, string>
+    }
   }
 }
