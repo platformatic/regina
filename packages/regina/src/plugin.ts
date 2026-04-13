@@ -1,10 +1,11 @@
 import { ensureLoggableError, kMetadata } from '@platformatic/foundation'
 import type { FastifyInstance } from 'fastify'
 import fp from 'fastify-plugin'
+import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import { discoverAgents } from './agent-discovery.ts'
+import type { ApplicationPreparer, InstanceManagerOptions } from './instance-manager.ts'
 import { InstanceManager } from './instance-manager.ts'
-import type { InstanceManagerOptions } from './instance-manager.ts'
 import { MemberRegistry } from './member-registry.ts'
 import { createMetrics } from './metrics.ts'
 import { agentRoutes } from './routes/agents.ts'
@@ -12,6 +13,31 @@ import { chatRoutes } from './routes/chat.ts'
 import { delegateRoutes } from './routes/delegate.ts'
 import { instanceRoutes } from './routes/instances.ts'
 import { StateBackup } from './state-backup.ts'
+
+async function loadFactory (app: FastifyInstance, root: any, config: any): Promise<ApplicationPreparer | undefined> {
+  let factory: { prepareApplication?: ApplicationPreparer } = {}
+
+  if (config.factory.startsWith('npm:')) {
+    const require = createRequire(resolve(root, 'index.js'))
+    const packageName = config.factory.slice(4)
+
+    try {
+      factory = require(packageName)
+    } catch (err) {
+      app.log.error({ err: ensureLoggableError(err as Error) }, `Failed to load npm factory module ${packageName}.`)
+    }
+  } else {
+    const factoryPath = resolve(root, config.factory)
+
+    try {
+      factory = await import(factoryPath)
+    } catch (err) {
+      app.log.error({ err: ensureLoggableError(err as Error) }, `Failed to load factory module ${factoryPath}.`)
+    }
+  }
+
+  return typeof factory.prepareApplication === 'function' ? factory.prepareApplication : undefined
+}
 
 async function reginaPlugin (app: FastifyInstance, _options: Record<string, unknown>) {
   const config = (app as any).platformatic.config.regina ?? {}
@@ -94,16 +120,7 @@ async function reginaPlugin (app: FastifyInstance, _options: Record<string, unkn
   }
 
   if (config.factory) {
-    const factoryPath = resolve(root, config.factory)
-    try {
-      const factory = await import(factoryPath)
-
-      if (typeof factory.prepareApplication === 'function') {
-        instanceManagerOptions.prepareApplication = factory.prepareApplication
-      }
-    } catch (err) {
-      app.log.error({ err: ensureLoggableError(err as Error), path: factoryPath }, 'Failed to load factory module.')
-    }
+    instanceManagerOptions.prepareApplication = await loadFactory(app, root, config)
   }
 
   const instanceManager = new InstanceManager(instanceManagerOptions)
