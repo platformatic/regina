@@ -1,6 +1,6 @@
 {
   "name": "@platformatic/regina-storage",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Pluggable storage adapters for Regina state backup",
   "homepage": "https://github.com/platformatic/regina",
   "author": "Platformatic Inc. <oss@platformatic.dev> (https://platformatic.dev)",
