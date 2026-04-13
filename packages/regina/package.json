@@ -1,6 +1,6 @@
 {
   "name": "@platformatic/regina",
-  "version": "0.0.8",
+  "version": "0.1.2",
   "description": "AI Agent Orchestrator for Platformatic Watt",
   "homepage": "https://github.com/platformatic/regina",
   "author": "Platformatic Inc. <oss@platformatic.dev> (https://platformatic.dev)",
@@ -11,9 +11,6 @@
     "directory": "packages/regina"
   },
   "private": false,
-  "publishConfig": {
-    "access": "restricted"
-  },
   "publishConfig": {
     "access": "restricted"
   },
