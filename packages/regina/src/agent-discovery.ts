@@ -23,7 +23,7 @@ export interface AgentDefinition {
   filePath: string
 }
 
-function parseFrontmatter (content: string): { frontmatter: Record<string, unknown>, body: string } {
+export function parseFrontmatter (content: string): { frontmatter: Record<string, unknown>; body: string } {
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/)
   if (!match) {
     throw new Error('Invalid agent definition: missing YAML frontmatter')
@@ -47,19 +47,18 @@ export function parseAgentDefinition (content: string, filePath: string): AgentD
   const { frontmatter, body } = parseFrontmatter(content)
   validateDefinition(frontmatter, filePath)
 
-  const tools = Array.isArray(frontmatter.tools)
-    ? frontmatter.tools.map((t: unknown) => String(t))
-    : []
+  const tools = Array.isArray(frontmatter.tools) ? frontmatter.tools.map((t: unknown) => String(t)) : []
 
   const delegates = Array.isArray(frontmatter.delegates)
     ? frontmatter.delegates.map((d: unknown) => String(d))
     : undefined
 
   const mcpServers = Array.isArray(frontmatter.mcpServers)
-    ? frontmatter.mcpServers as AgentDefinition['mcpServers']
+    ? (frontmatter.mcpServers as AgentDefinition['mcpServers'])
     : undefined
 
   return {
+    ...frontmatter,
     id: frontmatter.name as string,
     name: frontmatter.name as string,
     description: frontmatter.description as string | undefined,
