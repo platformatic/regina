@@ -40,6 +40,8 @@ jobs:
           key: node-modules-${{ hashFiles('package.json') }}
       - name: Install dependencies
         run: pnpm install
+      - name: Build packages
+        run: pnpm -r build
       - name: Bump Version
         run: node scripts/bump-version.ts "${{ inputs.version }}" "${{ github.actor }}"
         env:
