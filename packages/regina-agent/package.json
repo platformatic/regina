@@ -1,6 +1,6 @@
 {
   "name": "@platformatic/regina-agent",
-  "version": "0.3.1",
+  "version": "1.0.0",
   "description": "AI Agent runtime for Platformatic Regina",
   "homepage": "https://github.com/platformatic/regina",
   "author": "Platformatic Inc. <oss@platformatic.dev> (https://platformatic.dev)",
