@@ -1,7 +1,8 @@
 import { strictEqual, ok } from 'node:assert'
 import test from 'node:test'
+import { tool, type CoreMessage } from 'ai'
 import { MockLanguageModelV1 } from 'ai/test'
-import type { CoreMessage } from 'ai'
+import { z } from 'zod'
 import { handleChat } from '../src/ai-handler.ts'
 import type { AgentDefinition } from '../src/definition-loader.ts'
 
@@ -152,11 +153,20 @@ test('handleChat - includes delegation instructions when delegate tool is availa
     }
   })
 
+  const delegateTool = tool({
+    description: 'Delegate to another agent',
+    parameters: z.object({
+      agentType: z.string(),
+      message: z.string()
+    }),
+    execute: async () => ({ ok: true })
+  })
+
   await handleChat({
     message: 'test',
     messages,
     definition,
-    tools: { delegate: {} as any },
+    tools: { delegate: delegateTool },
     model,
     delegateAgents: [
       { id: 'research-agent', name: 'Research Agent', description: 'Finds facts and gathers evidence' },

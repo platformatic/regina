@@ -79,15 +79,15 @@ export function buildSystemPrompt (
   if (definition.delegates?.length && tools.delegate) {
     const delegateSummary = delegateAgents?.length
       ? delegateAgents.map((agent) => {
-          const details = [
-            `- ${agent.id}`,
-            agent.name !== agent.id ? `name: ${agent.name}` : undefined,
-            agent.description ? `description: ${agent.description}` : undefined,
-            agent.greeting ? `greeting: ${agent.greeting}` : undefined
-          ].filter(Boolean).join('; ')
+        const details = [
+          `- ${agent.id}`,
+          agent.name !== agent.id ? `name: ${agent.name}` : undefined,
+          agent.description ? `description: ${agent.description}` : undefined,
+          agent.greeting ? `greeting: ${agent.greeting}` : undefined
+        ].filter(Boolean).join('; ')
 
-          return details
-        }).join('\n')
+        return details
+      }).join('\n')
       : definition.delegates.map(id => `- ${id}`).join('\n')
 
     sections.push([
