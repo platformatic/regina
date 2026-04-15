@@ -4,8 +4,10 @@ import {
   type RuntimeConfiguration,
   transform as runtimeTransform
 } from '@platformatic/runtime'
+import { execFile as execFileCb } from 'node:child_process'
 import { deepStrictEqual, ok } from 'node:assert'
-import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { promisify } from 'node:util'
+import { access, cp, lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import test, { type TestContext } from 'node:test'
 import { request } from 'undici'
@@ -16,6 +18,25 @@ interface Runtime extends PlatformaticRuntime {
   close (): Promise<void>
 }
 
+const execFile = promisify(execFileCb)
+const repoRoot = resolve(import.meta.dirname, '../../..')
+let buildOnce: Promise<void> | undefined
+
+async function ensureWorkspaceBuild () {
+  try {
+    await access(resolve(repoRoot, 'packages/regina/dist/index.js'))
+    await access(resolve(repoRoot, 'packages/regina-agent/dist/index.js'))
+    await access(resolve(repoRoot, 'packages/regina-storage/dist/index.js'))
+    return
+  } catch {}
+
+  buildOnce ??= execFile(process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm', ['build'], {
+    cwd: repoRoot
+  }).then(() => {})
+
+  await buildOnce
+}
+
 async function getAllLogs (rootDir: string) {
   const rawLogs = await readFile(resolve(rootDir, 'logs.txt'), 'utf-8')
   return rawLogs
@@ -24,11 +45,29 @@ async function getAllLogs (rootDir: string) {
     .map(line => JSON.parse(line))
 }
 
+async function ensureSymlink (target: string, path: string) {
+  try {
+    const stats = await lstat(path)
+    if (stats.isSymbolicLink()) {
+      return
+    }
+    throw new Error(`Expected ${path} to be a symlink`)
+  } catch (err: any) {
+    if (err.code !== 'ENOENT') {
+      throw err
+    }
+  }
+
+  await symlink(target, path, 'dir')
+}
+
 async function prepareRuntime (
   t: TestContext,
   fixtureDir: string,
   additionalSetup?: (rootDir: string) => Promise<void>
 ): Promise<{ rootDir: string; runtime: Runtime }> {
+  await ensureWorkspaceBuild()
+
   // Create the runtime
   await mkdir(resolve(import.meta.dirname, '../../../tmp'), { recursive: true })
   const rootDir = await mkdtemp(resolve(resolve(import.meta.dirname, '../../../tmp'), 'tmp-regina-agent-runtime-'))
@@ -36,12 +75,18 @@ async function prepareRuntime (
 
   // Ensure dependencies
   await mkdir(resolve(rootDir, 'node_modules/@platformatic'), { recursive: true })
-  await symlink(resolve(import.meta.dirname, '../'), resolve(rootDir, 'node_modules/@platformatic/regina-agent'), 'dir')
-  await symlink(
-    resolve(import.meta.dirname, '../../regina'),
-    resolve(rootDir, 'node_modules/@platformatic/regina'),
-    'dir'
-  )
+  await mkdir(resolve(rootDir, 'regina/node_modules/@platformatic'), { recursive: true })
+
+  const reginaAgentPath = resolve(import.meta.dirname, '../')
+  const reginaPath = resolve(import.meta.dirname, '../../regina')
+  const repoNodeModules = resolve(import.meta.dirname, '../../../node_modules/@platformatic')
+
+  await ensureSymlink(reginaAgentPath, resolve(rootDir, 'node_modules/@platformatic/regina-agent'))
+  await ensureSymlink(reginaPath, resolve(rootDir, 'node_modules/@platformatic/regina'))
+  await ensureSymlink(reginaAgentPath, resolve(rootDir, 'regina/node_modules/@platformatic/regina-agent'))
+  await ensureSymlink(reginaPath, resolve(rootDir, 'regina/node_modules/@platformatic/regina'))
+  await ensureSymlink(reginaAgentPath, resolve(repoNodeModules, 'regina-agent'))
+  await ensureSymlink(reginaPath, resolve(repoNodeModules, 'regina'))
 
   if (additionalSetup) {
     await additionalSetup(rootDir)
