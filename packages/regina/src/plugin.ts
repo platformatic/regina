@@ -13,9 +13,16 @@ import { chatRoutes } from './routes/chat.ts'
 import { delegateRoutes } from './routes/delegate.ts'
 import { instanceRoutes } from './routes/instances.ts'
 import { StateBackup } from './state-backup.ts'
+import type { BackupFunction, RestoreFunction } from './state-backup.ts'
 
-async function loadFactory (app: FastifyInstance, root: any, config: any): Promise<ApplicationPreparer | undefined> {
-  let factory: { prepareApplication?: ApplicationPreparer } = {}
+type Factory = {
+  prepareApplication?: ApplicationPreparer
+  backup?: BackupFunction
+  restore?: RestoreFunction
+}
+
+async function loadFactory (app: FastifyInstance, root: any, config: any): Promise<Factory | undefined> {
+  let factory: Factory | undefined
 
   if (config.factory.startsWith('npm:')) {
     const require = createRequire(resolve(root, 'index.js'))
@@ -36,7 +43,19 @@ async function loadFactory (app: FastifyInstance, root: any, config: any): Promi
     }
   }
 
-  return typeof factory.prepareApplication === 'function' ? factory.prepareApplication : undefined
+  if (factory) {
+    if (typeof factory.prepareApplication !== 'function') {
+      factory.prepareApplication = undefined
+    }
+    if (typeof factory.backup !== 'function') {
+      factory.backup = undefined
+    }
+    if (typeof factory.restore !== 'function') {
+      factory.restore = undefined
+    }
+  }
+
+  return factory
 }
 
 async function reginaPlugin (app: FastifyInstance, _options: Record<string, unknown>) {
@@ -52,7 +71,6 @@ async function reginaPlugin (app: FastifyInstance, _options: Record<string, unkn
   const management = (globalThis as any).platformatic?.management
   const coordinatorId: string | undefined = (globalThis as any).platformatic?.applicationId
   const idleTimeout = (config.idleTimeout ?? 300) * 1000
-  const vfsDir = resolve(root, config.vfsDir ?? './vfs')
 
   // Conditional Redis + MemberRegistry
   let redis: import('iovalkey').Redis | undefined
@@ -71,6 +89,11 @@ async function reginaPlugin (app: FastifyInstance, _options: Record<string, unkn
     }, 10_000)
     heartbeatInterval.unref()
     app.log.info({ memberId }, 'Registered in member registry')
+  }
+
+  let factory: Factory | undefined
+  if (config.factory) {
+    factory = await loadFactory(app, root, config)
   }
 
   // Conditional Storage + StateBackup
@@ -100,7 +123,10 @@ async function reginaPlugin (app: FastifyInstance, _options: Record<string, unkn
     }
 
     if (storageAdapter) {
-      stateBackup = new StateBackup(storageAdapter, vfsDir)
+      stateBackup = new StateBackup(storageAdapter, config, {
+        backup: factory?.backup,
+        restore: factory?.restore
+      })
       app.log.info({ type: storageConfig.type }, 'State backup enabled')
     }
   }
@@ -119,8 +145,8 @@ async function reginaPlugin (app: FastifyInstance, _options: Record<string, unkn
     useProcesses: config.useProcesses ?? false
   }
 
-  if (config.factory) {
-    instanceManagerOptions.prepareApplication = await loadFactory(app, root, config)
+  if (factory) {
+    instanceManagerOptions.prepareApplication = factory.prepareApplication
   }
 
   const instanceManager = new InstanceManager(instanceManagerOptions)
