@@ -171,7 +171,7 @@ sequenceDiagram
 stateDiagram-v2
     [*] --> Started: POST /agents/:defId/instances
     Started --> Started: chat / heartbeat (reset idle timer)
-    Started --> Suspended: Idle timeout expires
+    Started --> Suspended: Idle timeout / POST /instances/:id/suspend
     Suspended --> Started: Chat request arrives (auto-resume)
     Started --> Removed: DELETE /instances/:id
     Suspended --> Removed: DELETE /instances/:id
@@ -182,7 +182,7 @@ stateDiagram-v2
 
     Removed --> [*]
 
-    note right of BackedUp: SQLite backed up to<br/>shared storage (fs/S3/Redis)
+    note right of BackedUp: State backed up to<br/>shared storage (fs/S3/Redis)
 ```
 
 ## Built-in Tools
@@ -437,6 +437,7 @@ Set `regina.useProcesses` to `true` to run each `@platformatic/regina-agent` ins
 - `POST /agents/:defId/instances` -- Spawn a new agent instance
 - `GET /agents/:defId/instances` -- List running instances
 - `POST /instances/:instanceId/heartbeat` -- Keep instance alive (reset idle timer)
+- `POST /instances/:instanceId/suspend` -- Backup and stop an instance
 - `DELETE /instances/:instanceId` -- Teardown an instance
 
 ### Chat

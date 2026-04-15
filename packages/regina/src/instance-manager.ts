@@ -146,6 +146,7 @@ export class InstanceManager<Definition extends AgentDefinition = AgentDefinitio
     if (!instance) {
       throw new Error(`Instance not found: ${instanceId}`)
     }
+    if (instance.status === 'suspended') return
 
     if (this.#stateBackup) {
       await this.#stateBackup.backup(instanceId)
