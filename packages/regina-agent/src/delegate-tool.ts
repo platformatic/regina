@@ -10,10 +10,10 @@ export function createDelegateTool (
   const url = `http://${coordinatorId}.plt.local/delegate`
 
   return tool({
-    description: `Delegate a subtask to a specialized agent. Available agents: ${allowedAgentTypes.join(', ')}`,
+    description: `Communicate with another agent over the internal mesh network. The platform will find or spawn the target agent instance automatically. Available agents: ${allowedAgentTypes.join(', ')}`,
     parameters: z.object({
       agentType: z.enum(allowedAgentTypes as [string, ...string[]]).describe('The type of agent to delegate to'),
-      message: z.string().describe('The message/task to send to the delegate agent')
+      message: z.string().describe('A self-contained task for the delegate agent, including the goal, relevant context, constraints, and desired output')
     }),
     execute: async ({ agentType, message }) => {
       try {

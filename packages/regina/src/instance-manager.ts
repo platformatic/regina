@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { AgentDefinition } from './agent-discovery.ts'
+import type { DelegateAgentMetadata } from '../../regina-agent/src/schema.ts'
 import type { MemberRegistry } from './member-registry.ts'
 import type { ReginaMetrics } from './metrics.ts'
 import type { StateBackup } from './state-backup.ts'
@@ -57,6 +58,31 @@ export function resolveProviderEnvKey<Definition extends AgentDefinition> (defin
 
 export function generateId (prefix: string): string {
   return `${prefix}-${randomBytes(3).toString('hex')}`
+}
+
+function buildDelegateMetadata<Definition extends AgentDefinition> (
+  definition: Definition,
+  definitions: Map<string, Definition>
+): DelegateAgentMetadata[] | undefined {
+  if (!definition.delegates?.length) {
+    return undefined
+  }
+
+  const delegates = definition.delegates.flatMap((delegateId) => {
+    const delegate = definitions.get(delegateId)
+    if (!delegate) {
+      return []
+    }
+
+    return [{
+      id: delegate.id,
+      name: delegate.name,
+      description: delegate.description,
+      greeting: delegate.greeting
+    }]
+  })
+
+  return delegates.length > 0 ? delegates : undefined
 }
 
 export class InstanceManager<Definition extends AgentDefinition = AgentDefinition> {
@@ -307,6 +333,8 @@ export class InstanceManager<Definition extends AgentDefinition = AgentDefinitio
     instanceId?: string,
     apiKey?: string
   ) {
+    const delegateAgents = buildDelegateMetadata(definition, this.#definitions)
+
     return {
       module: '@platformatic/regina-agent',
       reginaAgent: {
@@ -315,7 +343,8 @@ export class InstanceManager<Definition extends AgentDefinition = AgentDefinitio
         toolsBasePath: dirname(definition.filePath),
         vfsDbPath,
         ...(coordinatorId ? { coordinatorId, instanceId } : {}),
-        ...(apiKey ? { apiKey } : {})
+        ...(apiKey ? { apiKey } : {}),
+        ...(delegateAgents ? { delegateAgents } : {})
       }
     }
   }
