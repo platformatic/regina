@@ -1,15 +1,10 @@
 import { strictEqual, ok, deepStrictEqual } from 'node:assert'
-import { execFile } from 'node:child_process'
-import { mkdtemp, writeFile, readFile, mkdir, readdir, rm } from 'node:fs/promises'
+import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import test from 'node:test'
-import { promisify } from 'node:util'
 import { FsAdapter } from '@platformatic/regina-storage'
-import type { BackupFunction, RestoreFunction } from '../src/state-backup.ts'
 import { StateBackup } from '../src/state-backup.ts'
-
-const execFileAsync = promisify(execFile)
 
 test('StateBackup', async (t) => {
   let vfsDir: string

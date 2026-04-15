@@ -49,4 +49,3 @@ export async function defaultRestore (instanceId: string, data: Buffer, config: 
   const filePath = resolve(config.vfsDir, `${instanceId}.sqlite`)
   await writeFile(filePath, data)
 }
-
