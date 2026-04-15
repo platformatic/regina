@@ -22,14 +22,14 @@ type Factory = {
 }
 
 async function loadFactory (app: FastifyInstance, root: any, config: any): Promise<Factory | undefined> {
-  let factory: Factory | undefined
+  let loaded: Record<string, unknown> | undefined
 
   if (config.factory.startsWith('npm:')) {
     const require = createRequire(resolve(root, 'index.js'))
     const packageName = config.factory.slice(4)
 
     try {
-      factory = require(packageName)
+      loaded = require(packageName)
     } catch (err) {
       app.log.error({ err: ensureLoggableError(err as Error) }, `Failed to load npm factory module ${packageName}.`)
     }
@@ -37,22 +37,23 @@ async function loadFactory (app: FastifyInstance, root: any, config: any): Promi
     const factoryPath = resolve(root, config.factory)
 
     try {
-      factory = await import(factoryPath)
+      loaded = await import(factoryPath)
     } catch (err) {
       app.log.error({ err: ensureLoggableError(err as Error) }, `Failed to load factory module ${factoryPath}.`)
     }
   }
 
-  if (factory) {
-    if (typeof factory.prepareApplication !== 'function') {
-      factory.prepareApplication = undefined
-    }
-    if (typeof factory.backup !== 'function') {
-      factory.backup = undefined
-    }
-    if (typeof factory.restore !== 'function') {
-      factory.restore = undefined
-    }
+  if (!loaded) return undefined
+
+  const factory: Factory = {}
+  if (typeof loaded.prepareApplication === 'function') {
+    factory.prepareApplication = loaded.prepareApplication as ApplicationPreparer
+  }
+  if (typeof loaded.backup === 'function') {
+    factory.backup = loaded.backup as BackupFunction
+  }
+  if (typeof loaded.restore === 'function') {
+    factory.restore = loaded.restore as RestoreFunction
   }
 
   return factory
