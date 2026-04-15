@@ -28,10 +28,10 @@
     "test": "node --experimental-strip-types --test --test-reporter=cleaner-spec-reporter test/*.test.ts"
   },
   "dependencies": {
-    "@platformatic/globals": "^3.49.1",
-    "@platformatic/foundation": "^3.49.1",
+    "@platformatic/globals": "^3.52.0",
+    "@platformatic/foundation": "^3.52.0",
     "@platformatic/regina-storage": "workspace:*",
-    "@platformatic/service": "^3.49.1",
+    "@platformatic/service": "^3.50.0",
     "fastify-plugin": "^5.0.1",
     "iovalkey": "^0.3.3",
     "nanoid": "^5.1.5",
