@@ -13,16 +13,23 @@ import { chatRoutes } from './routes/chat.ts'
 import { delegateRoutes } from './routes/delegate.ts'
 import { instanceRoutes } from './routes/instances.ts'
 import { StateBackup } from './state-backup.ts'
+import type { BackupFunction, RestoreFunction } from './state-backup.ts'
 
-async function loadFactory (app: FastifyInstance, root: any, config: any): Promise<ApplicationPreparer | undefined> {
-  let factory: { prepareApplication?: ApplicationPreparer } = {}
+type Factory = {
+  prepareApplication?: ApplicationPreparer
+  backup?: BackupFunction
+  restore?: RestoreFunction
+}
+
+async function loadFactory (app: FastifyInstance, root: any, config: any): Promise<Factory | undefined> {
+  let loaded: Record<string, unknown> | undefined
 
   if (config.factory.startsWith('npm:')) {
     const require = createRequire(resolve(root, 'index.js'))
     const packageName = config.factory.slice(4)
 
     try {
-      factory = require(packageName)
+      loaded = require(packageName)
     } catch (err) {
       app.log.error({ err: ensureLoggableError(err as Error) }, `Failed to load npm factory module ${packageName}.`)
     }
@@ -30,13 +37,26 @@ async function loadFactory (app: FastifyInstance, root: any, config: any): Promi
     const factoryPath = resolve(root, config.factory)
 
     try {
-      factory = await import(factoryPath)
+      loaded = await import(factoryPath)
     } catch (err) {
       app.log.error({ err: ensureLoggableError(err as Error) }, `Failed to load factory module ${factoryPath}.`)
     }
   }
 
-  return typeof factory.prepareApplication === 'function' ? factory.prepareApplication : undefined
+  if (!loaded) return undefined
+
+  const factory: Factory = {}
+  if (typeof loaded.prepareApplication === 'function') {
+    factory.prepareApplication = loaded.prepareApplication as ApplicationPreparer
+  }
+  if (typeof loaded.backup === 'function') {
+    factory.backup = loaded.backup as BackupFunction
+  }
+  if (typeof loaded.restore === 'function') {
+    factory.restore = loaded.restore as RestoreFunction
+  }
+
+  return factory
 }
 
 async function reginaPlugin (app: FastifyInstance, _options: Record<string, unknown>) {
@@ -52,7 +72,6 @@ async function reginaPlugin (app: FastifyInstance, _options: Record<string, unkn
   const management = (globalThis as any).platformatic?.management
   const coordinatorId: string | undefined = (globalThis as any).platformatic?.applicationId
   const idleTimeout = (config.idleTimeout ?? 300) * 1000
-  const vfsDir = resolve(root, config.vfsDir ?? './vfs')
 
   // Conditional Redis + MemberRegistry
   let redis: import('iovalkey').Redis | undefined
@@ -71,6 +90,11 @@ async function reginaPlugin (app: FastifyInstance, _options: Record<string, unkn
     }, 10_000)
     heartbeatInterval.unref()
     app.log.info({ memberId }, 'Registered in member registry')
+  }
+
+  let factory: Factory | undefined
+  if (config.factory) {
+    factory = await loadFactory(app, root, config)
   }
 
   // Conditional Storage + StateBackup
@@ -100,7 +124,10 @@ async function reginaPlugin (app: FastifyInstance, _options: Record<string, unkn
     }
 
     if (storageAdapter) {
-      stateBackup = new StateBackup(storageAdapter, vfsDir)
+      stateBackup = new StateBackup(storageAdapter, config, {
+        backup: factory?.backup,
+        restore: factory?.restore
+      })
       app.log.info({ type: storageConfig.type }, 'State backup enabled')
     }
   }
@@ -119,8 +146,8 @@ async function reginaPlugin (app: FastifyInstance, _options: Record<string, unkn
     useProcesses: config.useProcesses ?? false
   }
 
-  if (config.factory) {
-    instanceManagerOptions.prepareApplication = await loadFactory(app, root, config)
+  if (factory) {
+    instanceManagerOptions.prepareApplication = factory.prepareApplication
   }
 
   const instanceManager = new InstanceManager(instanceManagerOptions)
