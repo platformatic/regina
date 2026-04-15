@@ -84,6 +84,23 @@ export async function instanceRoutes (app: FastifyInstance) {
     return reply.code(204).send()
   })
 
+  app.post('/instances/:instanceId/suspend', {
+    schema: {
+      operationId: 'suspendInstance',
+      params: {
+        type: 'object',
+        properties: {
+          instanceId: { type: 'string' }
+        },
+        required: ['instanceId']
+      }
+    }
+  }, async (request, reply) => {
+    const { instanceId } = request.params as { instanceId: string }
+    await instanceManager.suspendInstance(instanceId)
+    return reply.code(204).send()
+  })
+
   app.delete('/instances/:instanceId', {
     schema: {
       operationId: 'removeInstance',

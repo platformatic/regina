@@ -241,6 +241,22 @@ test('InstanceManager - suspendInstance throws for unknown instance', async t =>
   }
 })
 
+test('InstanceManager - suspendInstance is a no-op if already suspended', async t => {
+  const testRoot = await createTestRoot(t)
+  const defs = createMockDefinitions()
+  const mgmt = createMockManagement()
+  const manager = createManager(defs, mgmt, testRoot)
+
+  const info = await manager.spawnInstance('test-agent')
+  await manager.suspendInstance(info.instanceId)
+  strictEqual(mgmt.stopped.length, 1)
+
+  // Second suspend should be a no-op
+  await manager.suspendInstance(info.instanceId)
+  strictEqual(info.status, 'suspended')
+  strictEqual(mgmt.stopped.length, 1, 'should not stop again')
+})
+
 test('InstanceManager - resumeInstance throws for unknown instance', async t => {
   const testRoot = await createTestRoot(t)
   const defs = createMockDefinitions()
