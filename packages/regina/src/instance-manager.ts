@@ -5,7 +5,6 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { AgentDefinition } from './agent-discovery.ts'
-import type { DelegateAgentMetadata } from '../../regina-agent/src/schema.ts'
 import type { MemberRegistry } from './member-registry.ts'
 import type { ReginaMetrics } from './metrics.ts'
 import type { StateBackup } from './state-backup.ts'
@@ -58,6 +57,13 @@ export function resolveProviderEnvKey<Definition extends AgentDefinition> (defin
 
 export function generateId (prefix: string): string {
   return `${prefix}-${randomBytes(3).toString('hex')}`
+}
+
+interface DelegateAgentMetadata {
+  id: string
+  name: string
+  description?: string
+  greeting?: string
 }
 
 function buildDelegateMetadata<Definition extends AgentDefinition> (
