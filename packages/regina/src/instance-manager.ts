@@ -59,6 +59,38 @@ export function generateId (prefix: string): string {
   return `${prefix}-${randomBytes(3).toString('hex')}`
 }
 
+interface DelegateAgentMetadata {
+  id: string
+  name: string
+  description?: string
+  greeting?: string
+}
+
+function buildDelegateMetadata<Definition extends AgentDefinition> (
+  definition: Definition,
+  definitions: Map<string, Definition>
+): DelegateAgentMetadata[] | undefined {
+  if (!definition.delegates?.length) {
+    return undefined
+  }
+
+  const delegates = definition.delegates.flatMap((delegateId) => {
+    const delegate = definitions.get(delegateId)
+    if (!delegate) {
+      return []
+    }
+
+    return [{
+      id: delegate.id,
+      name: delegate.name,
+      description: delegate.description,
+      greeting: delegate.greeting
+    }]
+  })
+
+  return delegates.length > 0 ? delegates : undefined
+}
+
 export class InstanceManager<Definition extends AgentDefinition = AgentDefinition> {
   #instances = new Map<string, InstanceInfo>()
   #timers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -307,6 +339,8 @@ export class InstanceManager<Definition extends AgentDefinition = AgentDefinitio
     instanceId?: string,
     apiKey?: string
   ) {
+    const delegateAgents = buildDelegateMetadata(definition, this.#definitions)
+
     return {
       module: '@platformatic/regina-agent',
       reginaAgent: {
@@ -315,7 +349,8 @@ export class InstanceManager<Definition extends AgentDefinition = AgentDefinitio
         toolsBasePath: dirname(definition.filePath),
         vfsDbPath,
         ...(coordinatorId ? { coordinatorId, instanceId } : {}),
-        ...(apiKey ? { apiKey } : {})
+        ...(apiKey ? { apiKey } : {}),
+        ...(delegateAgents ? { delegateAgents } : {})
       }
     }
   }

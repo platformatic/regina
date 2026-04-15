@@ -2,6 +2,7 @@ import { generateText, streamText, type CoreMessage, type CoreTool, type Languag
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { createOpenAI } from '@ai-sdk/openai'
 import type { AgentDefinition } from './definition-loader.ts'
+import type { DelegateAgentMetadata } from './schema.ts'
 import { compactMessages } from './compaction.ts'
 
 export interface ProviderSettings {
@@ -65,19 +66,58 @@ export interface ChatOptions {
   providerSettings?: ProviderSettings
   onStepFinish?: (step: StepResult<ToolSet>) => void
   steeringQueue?: string[]
+  delegateAgents?: DelegateAgentMetadata[]
+}
+
+export function buildSystemPrompt (
+  definition: AgentDefinition,
+  tools: Record<string, CoreTool>,
+  delegateAgents?: DelegateAgentMetadata[]
+): string {
+  const sections = [definition.systemPrompt]
+
+  if (definition.delegates?.length && tools.delegate) {
+    const delegateSummary = delegateAgents?.length
+      ? delegateAgents.map((agent) => {
+        const details = [
+          `- ${agent.id}`,
+          agent.name !== agent.id ? `name: ${agent.name}` : undefined,
+          agent.description ? `description: ${agent.description}` : undefined,
+          agent.greeting ? `greeting: ${agent.greeting}` : undefined
+        ].filter(Boolean).join('; ')
+
+        return details
+      }).join('\n')
+      : definition.delegates.map(id => `- ${id}`).join('\n')
+
+    sections.push([
+      '## Runtime capabilities',
+      'You can communicate with other agents over the internal mesh network by using the `delegate` tool.',
+      `Allowed agent types: ${definition.delegates.join(', ')}.`,
+      'When a task would benefit from a specialist, more bandwidth, or a fresh sub-agent, call `delegate` instead of saying you cannot do that.',
+      'The platform will find or spawn the target agent instance for you automatically.',
+      'When delegating, send a self-contained message with the goal, relevant context, constraints, and the exact output you want back.',
+      '',
+      'Available delegate agents:',
+      delegateSummary
+    ].join('\n'))
+  }
+
+  return sections.join('\n\n')
 }
 
 export async function handleChat (options: ChatOptions): Promise<ChatResult> {
-  const { message, messages, definition, tools, onStepFinish, steeringQueue } = options
+  const { message, messages, definition, tools, onStepFinish, steeringQueue, delegateAgents } = options
   messages.push({ role: 'user', content: message })
 
   const model = options.model ?? resolveProvider(definition, options.providerSettings)
+  const systemPrompt = buildSystemPrompt(definition, tools, delegateAgents)
 
   await compactMessages(messages, model)
 
   const result = await generateText({
     model,
-    system: definition.systemPrompt,
+    system: systemPrompt,
     messages,
     tools,
     maxSteps: definition.maxSteps ?? 10,
@@ -107,16 +147,17 @@ export async function handleChat (options: ChatOptions): Promise<ChatResult> {
 }
 
 export async function handleStreamChat (options: ChatOptions) {
-  const { message, messages, definition, tools, onStepFinish, steeringQueue } = options
+  const { message, messages, definition, tools, onStepFinish, steeringQueue, delegateAgents } = options
   messages.push({ role: 'user', content: message })
 
   const model = options.model ?? resolveProvider(definition, options.providerSettings)
+  const systemPrompt = buildSystemPrompt(definition, tools, delegateAgents)
 
   await compactMessages(messages, model)
 
   const result = streamText({
     model,
-    system: definition.systemPrompt,
+    system: systemPrompt,
     messages,
     tools,
     maxSteps: definition.maxSteps ?? 10,

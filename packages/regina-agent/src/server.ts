@@ -180,7 +180,8 @@ export async function create (): Promise<FastifyInstance> {
         tools,
         providerSettings,
         onStepFinish,
-        steeringQueue
+        steeringQueue,
+        delegateAgents: config.delegateAgents
       })
       stopTimer?.()
       return result
@@ -211,7 +212,8 @@ export async function create (): Promise<FastifyInstance> {
         tools,
         providerSettings,
         onStepFinish,
-        steeringQueue
+        steeringQueue,
+        delegateAgents: config.delegateAgents
       })
 
       request.streamDone = result.text.catch(() => {})

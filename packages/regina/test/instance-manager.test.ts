@@ -22,8 +22,19 @@ function createMockDefinitions (): Map<string, AgentDefinition> {
     description: 'Test agent',
     model: 'claude-sonnet-4-5',
     tools: [],
+    delegates: ['research-agent'],
     systemPrompt: 'You are a test agent.',
     filePath: '/tmp/test-agent.md'
+  })
+  defs.set('research-agent', {
+    id: 'research-agent',
+    name: 'Research Agent',
+    description: 'Finds facts and gathers evidence',
+    greeting: 'I can help with research tasks.',
+    model: 'claude-sonnet-4-5',
+    tools: [],
+    systemPrompt: 'You are a research agent.',
+    filePath: '/tmp/research-agent.md'
   })
   return defs
 }
@@ -342,6 +353,21 @@ test('InstanceManager - passes coordinatorId and instanceId to agent config', as
   const config = await readAddedConfig(mgmt)
   strictEqual(config.reginaAgent.coordinatorId, 'coordinator-abc')
   strictEqual(config.reginaAgent.instanceId, info.instanceId)
+})
+
+test('InstanceManager - passes delegate agent metadata to agent config', async t => {
+  const testRoot = await createTestRoot(t)
+  const defs = createMockDefinitions()
+  const mgmt = createMockManagement()
+  const manager = createManager(defs, mgmt, testRoot)
+
+  await manager.spawnInstance('test-agent')
+  const config = await readAddedConfig(mgmt)
+  strictEqual(config.reginaAgent.delegateAgents.length, 1)
+  strictEqual(config.reginaAgent.delegateAgents[0].id, 'research-agent')
+  strictEqual(config.reginaAgent.delegateAgents[0].name, 'Research Agent')
+  strictEqual(config.reginaAgent.delegateAgents[0].description, 'Finds facts and gathers evidence')
+  strictEqual(config.reginaAgent.delegateAgents[0].greeting, 'I can help with research tasks.')
 })
 
 test('InstanceManager - omits coordinatorId when not provided', async t => {

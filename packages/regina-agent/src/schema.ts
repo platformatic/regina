@@ -5,6 +5,13 @@ import { resolve } from 'node:path'
 export const packageJson = JSON.parse(readFileSync(resolve(import.meta.dirname, '../package.json'), 'utf-8'))
 export const version: string = packageJson.version
 
+export interface DelegateAgentMetadata {
+  id: string
+  name: string
+  description?: string
+  greeting?: string
+}
+
 export interface ReginaAgentConfiguration extends NodeConfiguration {
   reginaAgent: {
     definitionPath: string
@@ -16,6 +23,7 @@ export interface ReginaAgentConfiguration extends NodeConfiguration {
     baseURL?: string
     allowedEnv?: string[]
     useProcesses?: boolean
+    delegateAgents?: DelegateAgentMetadata[]
   }
 }
 
@@ -30,7 +38,21 @@ export const reginaAgent = {
     apiKey: { type: 'string' },
     baseURL: { type: 'string' },
     allowedEnv: { type: 'array', items: { type: 'string' } },
-    useProcesses: { type: 'boolean', default: false }
+    useProcesses: { type: 'boolean', default: false },
+    delegateAgents: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          name: { type: 'string' },
+          description: { type: 'string' },
+          greeting: { type: 'string' }
+        },
+        required: ['id', 'name'],
+        additionalProperties: false
+      }
+    }
   },
   required: ['definitionPath'],
   additionalProperties: false
