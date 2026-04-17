@@ -1,9 +1,10 @@
+import { existsSync } from 'node:fs'
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import type { StorageAdapter } from '@platformatic/regina-storage'
 
-export type BackupFunction = (instanceId: string, config: Record<string, any>) => Promise<Buffer>
-export type RestoreFunction = (instanceId: string, data: Buffer, config: Record<string, any>) => Promise<void>
+export type BackupFunction = (storage: StorageAdapter, instanceId: string, config: Record<string, any>) => Promise<void>
+export type RestoreFunction = (storage: StorageAdapter, instanceId: string, config: Record<string, any>) => Promise<boolean>
 
 export class StateBackup {
   #storage: StorageAdapter
@@ -22,16 +23,11 @@ export class StateBackup {
   }
 
   async backup (instanceId: string): Promise<void> {
-    const data = await this.#backup(instanceId, this.#config)
-    await this.#storage.put(instanceId, data)
+    await this.#backup(this.#storage, instanceId, this.#config)
   }
 
   async restore (instanceId: string): Promise<boolean> {
-    const data = await this.#storage.get(instanceId)
-    if (!data) return false
-
-    await this.#restore(instanceId, data, this.#config)
-    return true
+    return this.#restore(this.#storage, instanceId, this.#config)
   }
 
   async cleanup (instanceId: string): Promise<void> {
@@ -39,13 +35,28 @@ export class StateBackup {
   }
 }
 
-export async function defaultBackup (instanceId: string, config: Record<string, any>): Promise<Buffer> {
+export async function defaultBackup (
+  storage: StorageAdapter,
+  instanceId: string,
+  config: Record<string, any>
+): Promise<void> {
   const filePath = resolve(config.vfsDir, `${instanceId}.sqlite`)
-  return readFile(filePath)
+  const data = await readFile(filePath)
+  await storage.put(instanceId, data)
 }
 
-export async function defaultRestore (instanceId: string, data: Buffer, config: Record<string, any>): Promise<void> {
-  await mkdir(config.vfsDir, { recursive: true })
+export async function defaultRestore (
+  storage: StorageAdapter,
+  instanceId: string,
+  config: Record<string, any>
+): Promise<boolean> {
   const filePath = resolve(config.vfsDir, `${instanceId}.sqlite`)
+  if (existsSync(filePath)) return true
+
+  const data = await storage.get(instanceId)
+  if (!data) return false
+
+  await mkdir(config.vfsDir, { recursive: true })
   await writeFile(filePath, data)
+  return true
 }

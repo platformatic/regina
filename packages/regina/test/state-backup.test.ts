@@ -1,15 +1,11 @@
 import { strictEqual, ok, deepStrictEqual } from 'node:assert'
-import { execFile } from 'node:child_process'
 import { mkdtemp, writeFile, readFile, mkdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { promisify } from 'node:util'
 import { FsAdapter } from '@platformatic/regina-storage'
 import type { BackupFunction, RestoreFunction } from '../src/state-backup.ts'
 import { StateBackup } from '../src/state-backup.ts'
-
-const execFileAsync = promisify(execFile)
 
 test('StateBackup', async (t) => {
   let vfsDir: string
@@ -61,6 +57,25 @@ test('StateBackup', async (t) => {
 
     const result = await backup.restore('nonexistent')
     strictEqual(result, false)
+  })
+
+  await t.test('restore skips fetch if local file already exists', async () => {
+    const adapter = new FsAdapter({ basePath: storageDir })
+    const backup = new StateBackup(adapter, { vfsDir })
+
+    const instanceId = 'test-instance-local'
+    const localData = Buffer.from('local sqlite')
+    const storageData = Buffer.from('storage sqlite')
+
+    await writeFile(join(vfsDir, `${instanceId}.sqlite`), localData)
+    await adapter.put(instanceId, storageData)
+
+    const result = await backup.restore(instanceId)
+    strictEqual(result, true)
+
+    // Local file should NOT be overwritten
+    const content = await readFile(join(vfsDir, `${instanceId}.sqlite`))
+    deepStrictEqual(content, localData)
   })
 
   await t.test('cleanup removes from storage', async () => {
@@ -115,55 +130,56 @@ test('StateBackup', async (t) => {
     deepStrictEqual(restored, data)
   })
 
-  await t.test('custom backup/restore with tarball roundtrip', async () => {
-    const dataDir = await mkdtemp(join(tmpdir(), 'regina-tarball-'))
+  await t.test('custom backup/restore functions receive storage adapter', async () => {
+    const adapter = new FsAdapter({ basePath: storageDir })
+
+    const customBackup: BackupFunction = async (storage, instanceId, config) => {
+      const data = Buffer.from(`custom-${instanceId}`)
+      await storage.put(instanceId, data)
+    }
+
+    const customRestore: RestoreFunction = async (storage, instanceId, config) => {
+      const data = await storage.get(instanceId)
+      if (!data) return false
+      await mkdir(config.dataDir, { recursive: true })
+      await writeFile(join(config.dataDir, `${instanceId}.dat`), data)
+      return true
+    }
+
+    const dataDir = await mkdtemp(join(tmpdir(), 'regina-custom-'))
     t.after(() => rm(dataDir, { recursive: true, force: true }))
 
-    const tarBackup: BackupFunction = async (instanceId) => {
-      const { stdout } = await execFileAsync('tar', ['-cf', '-', '-C', dataDir, instanceId], {
-        encoding: 'buffer',
-        maxBuffer: 50 * 1024 * 1024
-      })
-      return stdout
-    }
-
-    const tarRestore: RestoreFunction = async (instanceId, data) => {
-      const tarPath = join(dataDir, `${instanceId}.tar`)
-      await writeFile(tarPath, data)
-      await execFileAsync('tar', ['-xf', tarPath, '-C', dataDir])
-      await rm(tarPath)
-    }
-
-    const adapter = new FsAdapter({ basePath: storageDir })
-    const backup = new StateBackup(adapter, {}, {
-      backup: tarBackup,
-      restore: tarRestore
+    const backup = new StateBackup(adapter, { dataDir }, {
+      backup: customBackup,
+      restore: customRestore
     })
 
     const instanceId = 'test-instance-6'
-    const instanceDir = join(dataDir, instanceId)
-    await mkdir(instanceDir, { recursive: true })
-    await mkdir(join(instanceDir, 'subdir'), { recursive: true })
-    await writeFile(join(instanceDir, 'state.json'), '{"key":"value"}')
-    await writeFile(join(instanceDir, 'data.bin'), Buffer.from([1, 2, 3, 4]))
-    await writeFile(join(instanceDir, 'subdir', 'nested.txt'), 'nested content')
-
     await backup.backup(instanceId)
 
-    // Delete local folder
-    await rm(instanceDir, { recursive: true })
+    const stored = await adapter.get(instanceId)
+    ok(stored)
+    deepStrictEqual(stored, Buffer.from(`custom-${instanceId}`))
 
-    // Restore from backup
     const result = await backup.restore(instanceId)
     strictEqual(result, true)
 
-    const state = await readFile(join(instanceDir, 'state.json'), 'utf-8')
-    strictEqual(state, '{"key":"value"}')
+    const restored = await readFile(join(dataDir, `${instanceId}.dat`))
+    deepStrictEqual(restored, Buffer.from(`custom-${instanceId}`))
+  })
 
-    const bin = await readFile(join(instanceDir, 'data.bin'))
-    deepStrictEqual(bin, Buffer.from([1, 2, 3, 4]))
+  await t.test('custom restore returns false when no data in storage', async () => {
+    const adapter = new FsAdapter({ basePath: storageDir })
 
-    const nested = await readFile(join(instanceDir, 'subdir', 'nested.txt'), 'utf-8')
-    strictEqual(nested, 'nested content')
+    const customRestore: RestoreFunction = async (storage, instanceId) => {
+      const data = await storage.get(instanceId)
+      if (!data) return false
+      return true
+    }
+
+    const backup = new StateBackup(adapter, {}, { restore: customRestore })
+
+    const result = await backup.restore('nonexistent')
+    strictEqual(result, false)
   })
 })
