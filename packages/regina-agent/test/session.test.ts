@@ -1,7 +1,10 @@
 import { deepStrictEqual, strictEqual } from 'node:assert'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import test from 'node:test'
 import type { CoreMessage } from 'ai'
-import { create as createVfs, MemoryProvider } from '@platformatic/vfs'
+import { create as createVfs, MemoryProvider, RealFSProvider } from '@platformatic/vfs'
 import { loadMessages, appendMessages, rewriteMessages } from '../src/session.ts'
 
 function setup () {
@@ -84,4 +87,25 @@ test('roundtrip - append then load preserves messages', () => {
   const loaded = loadMessages(vfs)
 
   deepStrictEqual(loaded, [msg1, msg2])
+})
+
+test('RealFSProvider - messages persist to disk', async (t) => {
+  const rootPath = await mkdtemp(join(tmpdir(), 'regina-realfs-'))
+  t.after(() => rm(rootPath, { recursive: true, force: true }))
+
+  const provider = new RealFSProvider(rootPath)
+  const vfs = createVfs(provider, { moduleHooks: false })
+
+  const msg1: CoreMessage = { role: 'user', content: 'hello' }
+  const msg2: CoreMessage = { role: 'assistant', content: 'world' }
+
+  appendMessages(vfs, msg1, msg2)
+  const loaded = loadMessages(vfs)
+  deepStrictEqual(loaded, [msg1, msg2])
+
+  // Create a new VFS from the same root — messages should persist
+  const provider2 = new RealFSProvider(rootPath)
+  const vfs2 = createVfs(provider2, { moduleHooks: false })
+  const reloaded = loadMessages(vfs2)
+  deepStrictEqual(reloaded, [msg1, msg2])
 })

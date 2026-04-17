@@ -140,6 +140,14 @@ sequenceDiagram
 
 Conversations are stored as JSONL in the VFS at `/.session/messages.jsonl`. Messages are appended incrementally. On restart, the full history is restored.
 
+The VFS backend depends on configuration:
+
+| Config | Provider | Persistence |
+|---|---|---|
+| (default) | `MemoryProvider` | In-memory only, lost on process exit |
+| `vfsDbPath` | `SqliteProvider` | SQLite database file |
+| `fsRootPath` | `RealFSProvider` | Real filesystem directory |
+
 ## Context Compaction
 
 When the estimated token count exceeds a threshold (default: 100,000), older messages are automatically summarized by the model:
@@ -190,6 +198,7 @@ These options are set automatically by `@platformatic/regina` when spawning an i
 | `definitionPath` | Path to the agent's markdown definition file |
 | `toolsBasePath` | Base directory for resolving tool module paths |
 | `vfsDbPath` | Path to the SQLite database for this instance's VFS |
+| `fsRootPath` | Path to a real filesystem directory for the VFS. When set, agent files and messages are persisted directly to disk. |
 | `apiKey` | AI provider API key (injected from environment) |
 | `coordinatorId` | Parent service ID in the Watt runtime |
 | `instanceId` | This instance's unique identifier |
