@@ -1,5 +1,5 @@
 import { getGlobal } from '@platformatic/globals'
-import { create as createVfs, MemoryProvider, SqliteProvider } from '@platformatic/vfs'
+import { create as createVfs } from '@platformatic/vfs'
 import type { CoreMessage, StepResult, ToolSet } from 'ai'
 import fastify, { FastifyBaseLogger, type FastifyInstance } from 'fastify'
 import { Readable } from 'node:stream'
@@ -14,6 +14,7 @@ import { createMetrics } from './metrics.ts'
 import { ReginaAgentConfiguration } from './schema.ts'
 import { appendMessages, loadMessages, rewriteMessages } from './session.ts'
 import { loadTools } from './tool-loader.ts'
+import { createProvider } from './vfs-provider.ts'
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -38,7 +39,7 @@ export async function create (): Promise<FastifyInstance> {
 
   const providerSettings: ProviderSettings = { apiKey: config.apiKey, baseURL: config.baseURL }
 
-  const provider = config.vfsDbPath ? new SqliteProvider(config.vfsDbPath) : new MemoryProvider()
+  const provider = createProvider(config)
   const vfs = createVfs(provider, { moduleHooks: false })
 
   const definition = await loadDefinition(config.definitionPath)

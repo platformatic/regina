@@ -17,6 +17,7 @@ export interface ReginaAgentConfiguration extends NodeConfiguration {
     definitionPath: string
     toolsBasePath?: string
     vfsDbPath?: string
+    fsRootPath?: string
     coordinatorId?: string
     instanceId?: string
     apiKey?: string
@@ -33,6 +34,7 @@ export const reginaAgent = {
     definitionPath: { type: 'string' },
     toolsBasePath: { type: 'string' },
     vfsDbPath: { type: 'string' },
+    fsRootPath: { type: 'string' },
     coordinatorId: { type: 'string' },
     instanceId: { type: 'string' },
     apiKey: { type: 'string' },

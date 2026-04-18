@@ -36,6 +36,7 @@ test('schema - reginaAgent config shape', () => {
       definitionPath: { type: 'string' },
       toolsBasePath: { type: 'string' },
       vfsDbPath: { type: 'string' },
+      fsRootPath: { type: 'string' },
       coordinatorId: { type: 'string' },
       instanceId: { type: 'string' },
       apiKey: { type: 'string' },
