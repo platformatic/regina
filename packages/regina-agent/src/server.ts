@@ -223,7 +223,12 @@ export async function create (): Promise<FastifyInstance> {
         // eslint-disable-next-line @stylistic/generator-star-spacing
         (async function* () {
           for await (const part of result.fullStream) {
-            yield JSON.stringify(part) + '\n'
+            if (part.type === 'error') {
+              const err = part.error as Error
+              yield JSON.stringify({ type: 'text-delta', textDelta: `\nError: ${err.message}` }) + '\n'
+            } else {
+              yield JSON.stringify(part) + '\n'
+            }
           }
         })()
       )
