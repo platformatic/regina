@@ -1,6 +1,7 @@
-import { strictEqual, throws } from 'node:assert'
+import { deepStrictEqual, strictEqual, throws } from 'node:assert'
 import test from 'node:test'
-import { resolveProvider } from '../src/ai-handler.ts'
+import type { CoreMessage } from 'ai'
+import { resolveProvider, handleChat } from '../src/ai-handler.ts'
 import type { AgentDefinition } from '../src/definition-loader.ts'
 
 function createDefinition (overrides: Partial<AgentDefinition> = {}): AgentDefinition {
@@ -102,4 +103,28 @@ test('resolveProvider - explicit provider overrides inference', () => {
   const model = resolveProvider(definition, { apiKey: 'test-key' })
   strictEqual(model.provider, 'anthropic.messages')
   strictEqual(model.modelId, 'anthropic/claude-sonnet-4-5')
+})
+
+test('handleChat - catches errors and returns them as assistant message', async () => {
+  const messages: CoreMessage[] = []
+  const failingModel = {
+    doGenerate: async () => { throw new Error('Tool execution failed: file not found') },
+    provider: 'test',
+    modelId: 'test',
+    specificationVersion: 'v1' as const
+  }
+
+  const result = await handleChat({
+    message: 'read the file',
+    messages,
+    definition: createDefinition(),
+    tools: {},
+    model: failingModel as any
+  })
+
+  strictEqual(result.text, 'Error: Tool execution failed: file not found')
+  deepStrictEqual(messages, [
+    { role: 'user', content: 'read the file' },
+    { role: 'assistant', content: 'Error: Tool execution failed: file not found' }
+  ])
 })

@@ -115,34 +115,40 @@ export async function handleChat (options: ChatOptions): Promise<ChatResult> {
 
   await compactMessages(messages, model)
 
-  const result = await generateText({
-    model,
-    system: systemPrompt,
-    messages,
-    tools,
-    maxSteps: definition.maxSteps ?? 10,
-    onStepFinish: (step) => {
-      if (steeringQueue) {
-        while (steeringQueue.length > 0) {
-          messages.push({ role: 'user', content: steeringQueue.shift()! })
+  try {
+    const result = await generateText({
+      model,
+      system: systemPrompt,
+      messages,
+      tools,
+      maxSteps: definition.maxSteps ?? 10,
+      onStepFinish: (step) => {
+        if (steeringQueue) {
+          while (steeringQueue.length > 0) {
+            messages.push({ role: 'user', content: steeringQueue.shift()! })
+          }
         }
+        onStepFinish?.(step)
       }
-      onStepFinish?.(step)
+    })
+
+    if (result.text) {
+      messages.push({ role: 'assistant', content: result.text })
     }
-  })
 
-  if (result.text) {
-    messages.push({ role: 'assistant', content: result.text })
-  }
-
-  return {
-    text: result.text,
-    usage: result.usage
-      ? {
-          promptTokens: result.usage.promptTokens,
-          completionTokens: result.usage.completionTokens
-        }
-      : undefined
+    return {
+      text: result.text,
+      usage: result.usage
+        ? {
+            promptTokens: result.usage.promptTokens,
+            completionTokens: result.usage.completionTokens
+          }
+        : undefined
+    }
+  } catch (err: any) {
+    const errorText = `Error: ${err.message}`
+    messages.push({ role: 'assistant', content: errorText })
+    return { text: errorText }
   }
 }
 
@@ -173,6 +179,10 @@ export async function handleStreamChat (options: ChatOptions) {
       if (text) {
         messages.push({ role: 'assistant', content: text })
       }
+    },
+    onError ({ error }) {
+      const errorText = `Error: ${(error as Error).message}`
+      messages.push({ role: 'assistant', content: errorText })
     }
   })
 
