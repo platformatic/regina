@@ -40,10 +40,14 @@ export async function create (): Promise<FastifyInstance> {
   const providerSettings: ProviderSettings = { apiKey: config.apiKey, baseURL: config.baseURL }
 
   const provider = createProvider(config)
-  const vfs = createVfs(provider, { moduleHooks: false })
+  const useRealFs = config.fsRootPath != null
+  const vfs = createVfs(provider, { moduleHooks: false, virtualCwd: useRealFs })
+  if (useRealFs) {
+    vfs.chdir('/')
+  }
 
   const definition = await loadDefinition(config.definitionPath)
-  const defaultTools = createDefaultTools(vfs)
+  const defaultTools = createDefaultTools(vfs, useRealFs ? { cwd: '/' } : undefined)
   const userTools = await loadTools(definition.tools)
   let mcpConnection: McpConnection | undefined
   if (definition.mcpServers?.length) {
