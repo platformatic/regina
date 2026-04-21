@@ -6,9 +6,9 @@ import type { CoreTool } from 'ai'
 import type { VirtualFileSystem } from '@platformatic/vfs'
 import { VfsAdapter } from './vfs-adapter.ts'
 
-export function createDefaultTools (vfs: VirtualFileSystem): Record<string, CoreTool> {
+export function createDefaultTools (vfs: VirtualFileSystem, options?: { cwd?: string }): Record<string, CoreTool> {
   const vfsAdapter = new VfsAdapter(vfs)
-  const bash = new Bash({ fs: vfsAdapter })
+  const bash = new Bash({ fs: vfsAdapter, cwd: options?.cwd })
 
   return {
     bash: tool({

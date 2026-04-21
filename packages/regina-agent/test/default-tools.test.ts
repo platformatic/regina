@@ -1,6 +1,9 @@
 import { strictEqual, ok } from 'node:assert'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import test from 'node:test'
-import { create as createVfs, MemoryProvider } from '@platformatic/vfs'
+import { create as createVfs, MemoryProvider, RealFSProvider } from '@platformatic/vfs'
 import { createDefaultTools } from '../src/default-tools.ts'
 
 function setup () {
@@ -118,4 +121,54 @@ test('edit_file - can delete text (new_string is empty)', async () => {
   const result = await editTool.execute({ path: '/tmp/edit.txt', old_string: ' remove', new_string: '' }, toolOpts)
   strictEqual(result.success, true)
   strictEqual(vfs.readFileSync('/tmp/edit.txt', 'utf-8'), 'keep keep')
+})
+
+test('RealFSProvider with virtualCwd - write and read resolve to same path', async (t) => {
+  const rootPath = await mkdtemp(join(tmpdir(), 'regina-realfs-tools-'))
+  t.after(() => rm(rootPath, { recursive: true, force: true }))
+
+  const provider = new RealFSProvider(rootPath)
+  const vfs = createVfs(provider, { moduleHooks: false, virtualCwd: true })
+  vfs.chdir('/')
+  const tools = createDefaultTools(vfs)
+
+  const writeTool = tools.write_file as any
+  const readTool = tools.read_file as any
+
+  await writeTool.execute({ path: 'foo.txt', content: 'hello' }, toolOpts)
+  const result = await readTool.execute({ path: 'foo.txt' }, toolOpts)
+  strictEqual(result.content, 'hello')
+})
+
+test('RealFSProvider with virtualCwd - absolute and relative paths resolve consistently', async (t) => {
+  const rootPath = await mkdtemp(join(tmpdir(), 'regina-realfs-tools-'))
+  t.after(() => rm(rootPath, { recursive: true, force: true }))
+
+  const provider = new RealFSProvider(rootPath)
+  const vfs = createVfs(provider, { moduleHooks: false, virtualCwd: true })
+  vfs.chdir('/')
+  const tools = createDefaultTools(vfs)
+
+  const writeTool = tools.write_file as any
+  const readTool = tools.read_file as any
+
+  await writeTool.execute({ path: 'bar.txt', content: '123' }, toolOpts)
+
+  // Read with absolute path should find the same file
+  const result = await readTool.execute({ path: '/bar.txt' }, toolOpts)
+  strictEqual(result.content, '123')
+})
+
+test('RealFSProvider with virtualCwd - bash pwd returns /', async (t) => {
+  const rootPath = await mkdtemp(join(tmpdir(), 'regina-realfs-tools-'))
+  t.after(() => rm(rootPath, { recursive: true, force: true }))
+
+  const provider = new RealFSProvider(rootPath)
+  const vfs = createVfs(provider, { moduleHooks: false, virtualCwd: true })
+  vfs.chdir('/')
+  const tools = createDefaultTools(vfs, { cwd: '/' })
+
+  const bashTool = tools.bash as any
+  const result = await bashTool.execute({ command: 'pwd' }, toolOpts)
+  strictEqual(result.stdout.trim(), '/')
 })
