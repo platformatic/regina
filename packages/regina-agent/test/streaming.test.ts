@@ -145,6 +145,44 @@ test('handleStreamChat - accumulates messages across calls', async () => {
   strictEqual(messages[1].content, 'second')
 })
 
+test('handleStreamChat - error events include error message', async () => {
+  const messages: CoreMessage[] = []
+  const definition = createTestDefinition()
+  const model = new MockLanguageModelV1({
+    doStream: async () => ({
+      stream: simulateReadableStream({
+        chunks: [
+          { type: 'text-delta', textDelta: 'partial' },
+          { type: 'error', error: new Error('tool failed: file not found') }
+        ]
+      }),
+      rawCall: { rawPrompt: null, rawSettings: {} }
+    })
+  })
+
+  const { result } = await handleStreamChat({
+    message: 'read file',
+    messages,
+    definition,
+    tools: {},
+    model
+  })
+
+  const events: any[] = []
+  for await (const event of result.fullStream) {
+    events.push(event)
+  }
+
+  const errorEvents = events.filter(e => e.type === 'error')
+  ok(errorEvents.length >= 1, 'should have at least one error event')
+
+  // Error should be saved to messages
+  await result.text.catch(() => {})
+  const errorMsg = messages.find(m => m.role === 'assistant' && typeof m.content === 'string' && m.content.includes('Error:'))
+  ok(errorMsg, 'error should be saved as assistant message')
+  ok((errorMsg!.content as string).includes('tool failed: file not found'), 'error message should contain the cause')
+})
+
 test('handleStreamChat - appends assistant response on finish', async () => {
   const messages: CoreMessage[] = []
   const definition = createTestDefinition()
