@@ -91,9 +91,9 @@ Set `regina.useProcesses` to `true` to run each `@platformatic/regina-agent` ins
 ```mermaid
 stateDiagram-v2
     [*] --> Started: spawnInstance()
-    Started --> Started: refreshTimer()
-    Started --> Suspended: idle timeout
-    Suspended --> Started: resumeInstance()
+    Started --> Started: refreshTimer() / heartbeat
+    Started --> Suspended: idle timeout / POST suspend
+    Suspended --> Started: POST resume / chat (auto-resume)
     Started --> [*]: removeInstance()
     Suspended --> [*]: removeInstance()
 
@@ -125,6 +125,8 @@ When a pod receives a request for an instance it doesn't have locally (e.g., aft
 - `POST /agents/:defId/instances` -- Spawn a new instance
 - `GET /agents/:defId/instances` -- List instances for a definition
 - `POST /instances/:instanceId/heartbeat` -- Reset idle timer
+- `POST /instances/:instanceId/suspend` -- Suspend an instance (backup state and stop)
+- `POST /instances/:instanceId/resume` -- Resume a suspended instance (restore state and start)
 - `DELETE /instances/:instanceId` -- Remove an instance
 
 ### Chat

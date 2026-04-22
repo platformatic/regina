@@ -25,11 +25,19 @@ async function setupTestServer (t: any) {
   const mockManagement = {
     added: [] as any[],
     removed: [] as string[][],
+    stopped: [] as string[],
+    started: [] as string[],
     async addApplications (apps: any[], start: boolean) {
       mockManagement.added.push({ apps, start })
     },
     async removeApplications (ids: string[]) {
       mockManagement.removed.push(ids)
+    },
+    async stopApplication (id: string) {
+      mockManagement.stopped.push(id)
+    },
+    async startApplication (id: string) {
+      mockManagement.started.push(id)
     }
   }
 
@@ -145,6 +153,117 @@ test('DELETE /instances/:instanceId - removes an instance', async (t) => {
   // Verify it's gone
   const listRes = await server.inject({ method: 'GET', url: '/agents/test-agent/instances' })
   strictEqual(JSON.parse(listRes.body).length, 0)
+})
+
+test('POST /instances/:instanceId/suspend - suspends a running instance', async (t) => {
+  const { server, mockManagement } = await setupTestServer(t)
+
+  const spawnRes = await server.inject({
+    method: 'POST',
+    url: '/agents/test-agent/instances',
+    payload: {}
+  })
+  const { instanceId } = JSON.parse(spawnRes.body)
+
+  const suspendRes = await server.inject({
+    method: 'POST',
+    url: `/instances/${instanceId}/suspend`
+  })
+  strictEqual(suspendRes.statusCode, 204)
+  strictEqual(mockManagement.stopped.length, 1)
+
+  // Verify it's suspended
+  const listRes = await server.inject({ method: 'GET', url: '/agents/test-agent/instances' })
+  const instances = JSON.parse(listRes.body)
+  strictEqual(instances[0].status, 'suspended')
+})
+
+test('POST /instances/:instanceId/suspend - no-op for already suspended instance', async (t) => {
+  const { server, mockManagement } = await setupTestServer(t)
+
+  const spawnRes = await server.inject({
+    method: 'POST',
+    url: '/agents/test-agent/instances',
+    payload: {}
+  })
+  const { instanceId } = JSON.parse(spawnRes.body)
+
+  await server.inject({ method: 'POST', url: `/instances/${instanceId}/suspend` })
+  strictEqual(mockManagement.stopped.length, 1)
+
+  // Suspend again — should be a no-op
+  const suspendRes = await server.inject({
+    method: 'POST',
+    url: `/instances/${instanceId}/suspend`
+  })
+  strictEqual(suspendRes.statusCode, 204)
+  strictEqual(mockManagement.stopped.length, 1)
+})
+
+test('POST /instances/:instanceId/suspend - returns 404 for unknown instance', async (t) => {
+  const { server } = await setupTestServer(t)
+  const res = await server.inject({
+    method: 'POST',
+    url: '/instances/nonexistent/suspend'
+  })
+  strictEqual(res.statusCode, 404)
+})
+
+test('POST /instances/:instanceId/resume - resumes a suspended instance', async (t) => {
+  const { server, mockManagement } = await setupTestServer(t)
+
+  const spawnRes = await server.inject({
+    method: 'POST',
+    url: '/agents/test-agent/instances',
+    payload: {}
+  })
+  const { instanceId } = JSON.parse(spawnRes.body)
+
+  // Suspend first
+  await server.inject({ method: 'POST', url: `/instances/${instanceId}/suspend` })
+  strictEqual(mockManagement.stopped.length, 1)
+
+  // Resume it
+  const resumeRes = await server.inject({
+    method: 'POST',
+    url: `/instances/${instanceId}/resume`
+  })
+  strictEqual(resumeRes.statusCode, 204)
+  strictEqual(mockManagement.started.length, 1)
+
+  // Verify it's started again
+  const listRes = await server.inject({ method: 'GET', url: '/agents/test-agent/instances' })
+  const instances = JSON.parse(listRes.body)
+  strictEqual(instances.length, 1)
+  strictEqual(instances[0].status, 'started')
+})
+
+test('POST /instances/:instanceId/resume - no-op for already started instance', async (t) => {
+  const { server, mockManagement } = await setupTestServer(t)
+
+  const spawnRes = await server.inject({
+    method: 'POST',
+    url: '/agents/test-agent/instances',
+    payload: {}
+  })
+  const { instanceId } = JSON.parse(spawnRes.body)
+
+  const resumeRes = await server.inject({
+    method: 'POST',
+    url: `/instances/${instanceId}/resume`
+  })
+  strictEqual(resumeRes.statusCode, 204)
+  // Should not have called startApplication since instance was already started
+  strictEqual(mockManagement.started.length, 0)
+})
+
+test('POST /instances/:instanceId/resume - returns 404 for unknown instance', async (t) => {
+  const { server } = await setupTestServer(t)
+  const res = await server.inject({
+    method: 'POST',
+    url: '/instances/nonexistent/resume'
+  })
+  strictEqual(res.statusCode, 404)
 })
 
 test('DELETE /instances/:instanceId - returns 500 for unknown instance', async (t) => {

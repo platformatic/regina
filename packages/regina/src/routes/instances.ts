@@ -97,7 +97,42 @@ export async function instanceRoutes (app: FastifyInstance) {
     }
   }, async (request, reply) => {
     const { instanceId } = request.params as { instanceId: string }
+    const instance = instanceManager.getInstance(instanceId)
+    if (!instance) {
+      return (reply as any).code(404).send({ error: 'Instance not found' })
+    }
+    if (instance.status === 'suspended') {
+      return reply.code(204).send()
+    }
     await instanceManager.suspendInstance(instanceId)
+    return reply.code(204).send()
+  })
+
+  app.post('/instances/:instanceId/resume', {
+    schema: {
+      operationId: 'resumeInstance',
+      params: {
+        type: 'object',
+        properties: {
+          instanceId: { type: 'string' }
+        },
+        required: ['instanceId']
+      }
+    }
+  }, async (request, reply) => {
+    const { instanceId } = request.params as { instanceId: string }
+    let instance = instanceManager.getInstance(instanceId)
+    if (!instance) {
+      instance = await instanceManager.restoreInstance(instanceId) ?? undefined
+    }
+    if (!instance) {
+      return (reply as any).code(404).send({ error: 'Instance not found' })
+    }
+
+    if (instance.status === 'suspended') {
+      await instanceManager.resumeInstance(instanceId)
+    }
+    instanceManager.refreshTimer(instanceId)
     return reply.code(204).send()
   })
 
