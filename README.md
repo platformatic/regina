@@ -172,7 +172,7 @@ stateDiagram-v2
     [*] --> Started: POST /agents/:defId/instances
     Started --> Started: chat / heartbeat (reset idle timer)
     Started --> Suspended: Idle timeout / POST /instances/:id/suspend
-    Suspended --> Started: Chat request arrives (auto-resume)
+    Suspended --> Started: POST /instances/:id/resume / chat (auto-resume)
     Started --> Removed: DELETE /instances/:id
     Suspended --> Removed: DELETE /instances/:id
 
@@ -437,7 +437,8 @@ Set `regina.useProcesses` to `true` to run each `@platformatic/regina-agent` ins
 - `POST /agents/:defId/instances` -- Spawn a new agent instance
 - `GET /agents/:defId/instances` -- List running instances
 - `POST /instances/:instanceId/heartbeat` -- Keep instance alive (reset idle timer)
-- `POST /instances/:instanceId/suspend` -- Backup and stop an instance
+- `POST /instances/:instanceId/suspend` -- Suspend an instance (backup state and stop)
+- `POST /instances/:instanceId/resume` -- Resume a suspended instance (restore state and start)
 - `DELETE /instances/:instanceId` -- Teardown an instance
 
 ### Chat
